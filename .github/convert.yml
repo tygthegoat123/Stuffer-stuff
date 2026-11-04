@@ -1,0 +1,71 @@
+name: Convert videos for CRT TV
+
+on:
+  push:
+    paths:
+      - '**.mp4'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  convert:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install ffmpeg
+        run: sudo apt-get update && sudo apt-get install -y ffmpeg jq
+
+      - name: Convert mp4 -> frame sheets + mp3
+        run: |
+          shopt -s globstar nullglob
+          FPS=15      # frames per second shown on the TV
+          W=256       # frame width
+          H=192       # frame height
+          COLS=4      # frames per sheet row   (4 x 5 = 20 frames per 1024x960 sheet)
+          ROWS=5
+
+          for f in **/*.mp4; do
+            case "$f" in converted/*) continue;; esac
+            name=$(basename "$f" .mp4)
+            slug=$(printf '%s' "$name" | tr -c 'A-Za-z0-9' '_')
+            out="converted/$slug"
+            if [ -f "$out/info.json" ]; then
+              echo "skip $f (already converted)"
+              continue
+            fi
+            echo "converting $f -> $out"
+            mkdir -p "$out"
+
+            # frames -> sheets
+            ffmpeg -y -loglevel error -i "$f" \
+              -vf "fps=$FPS,scale=$W:$H:force_original_aspect_ratio=decrease,pad=$W:$H:(ow-iw)/2:(oh-ih)/2,tile=${COLS}x${ROWS}" \
+              -q:v 5 "$out/sheet_%03d.jpg"
+
+            # audio (may not exist)
+            ffmpeg -y -loglevel error -i "$f" -vn -ac 2 -ar 44100 -b:a 96k "$out/audio.mp3" || true
+            has_audio=false
+            if [ -s "$out/audio.mp3" ]; then has_audio=true; else rm -f "$out/audio.mp3"; fi
+
+            dur=$(ffprobe -v error -show_entries format=duration -of csv=p=0 "$f")
+            frames=$(awk "BEGIN{printf \"%d\", $dur*$FPS}")
+            sheets=$(ls "$out"/sheet_*.jpg | wc -l)
+
+            jq -n --arg name "$name" \
+              --argjson fps $FPS --argjson frames "$frames" \
+              --argjson cols $COLS --argjson rows $ROWS \
+              --argjson fw $W --argjson fh $H \
+              --argjson sheets "$sheets" --argjson audio $has_audio \
+              '{name:$name,fps:$fps,frames:$frames,cols:$cols,rows:$rows,fw:$fw,fh:$fh,sheets:$sheets,audio:$audio}' \
+              > "$out/info.json"
+          done
+
+      - name: Commit converted files
+        run: |
+          git config user.name "github-actions"
+          git config user.email "actions@github.com"
+          git add converted
+          git commit -m "Add converted videos" || echo "nothing to commit"
+          git push
