@@ -30,6 +30,13 @@ jobs:
           COLS=4      # frames per sheet row   (4 x 5 = 20 frames per 1024x960 sheet)
           ROWS=5
 
+          count=$(find . -type f -iname '*.mp4' -not -path './.git/*' -not -path './converted/*' | wc -l)
+          echo "mp4 files found: $count"
+          if [ "$count" -eq 0 ]; then
+            echo "::error::No .mp4 files found in this repo. Upload your videos to the repo first."
+            exit 1
+          fi
+
           find . -type f -iname '*.mp4' -not -path './.git/*' -not -path './converted/*' -print0 | while IFS= read -r -d '' f; do
             f="${f#./}"
             echo "found video: $f ($(stat -c %s "$f") bytes)"
