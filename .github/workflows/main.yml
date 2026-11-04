@@ -66,8 +66,11 @@ jobs:
               > "$out/info.json"
           done
 
+          # index of converted videos (the Roblox script reads this, no API rate limits)
+          (cd converted && for d in */; do [ -f "${d}info.json" ] && echo "${d%/}"; done) | jq -R . | jq -s . > converted/index.json
           echo "--- converted ---"
           ls -R converted | head -50
+          cat converted/index.json
 
       - name: Commit converted files
         run: |
