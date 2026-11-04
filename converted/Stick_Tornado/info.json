@@ -1,0 +1,11 @@
+{
+  "name": "Stick Tornado",
+  "fps": 15,
+  "frames": 2033,
+  "cols": 4,
+  "rows": 5,
+  "fw": 256,
+  "fh": 192,
+  "sheets": 102,
+  "audio": true
+}
